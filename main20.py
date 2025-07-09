@@ -103,7 +103,7 @@ def main():
                             loc_eval= env.generate_positions() #lokasi untuk s_t
                             #channel_gain_eval = channel_gains_from_csv1[i]
                             channel_gain_eval=env.generate_channel_gain(loc_eval) #channel gain untuk s_t
-                            state_eval,inf=eval_env.reset(channel_gain_eval)
+                            state_eval,next_gain,inf=eval_env.reset(channel_gain_eval)
                             state_eval = np.array(state_eval, dtype=np.float32)
                             result1 = evaluate_policy(channel_gain_eval,state_eval,eval_env, agent, turns=1)
                             rate_lolos.append(result1['data_rate_lolos'])
@@ -239,9 +239,7 @@ def main():
                 opt.c_lr=0.3 * opt.c_lr
                 lr_steps=0
                 opt.noise -=0.1
-            loc= env.generate_positions() #lokasi untuk s_t
-            channel_gain=env.generate_channel_gain(loc) #channel gain untuk s_t
-            s,info= env.reset(channel_gain, seed=env_seed)  # Do not use opt.seed directly, or it can overfit to opt.seed
+            s,channel_gain,info= env.reset( seed=env_seed)  # Do not use opt.seed directly, or it can overfit to opt.seed
             env_seed += 1
             done = False
             langkah = 0
@@ -252,9 +250,7 @@ def main():
                     a = env.sample_valid_power2()
                 else: 
                     a = agent.select_action(s, deterministic=False)
-                next_loc= env.generate_positions() #lokasi untuk s_t
-                next_channel_gain=env.generate_channel_gain(next_loc) #channel gain untuk s_t
-                s_next, r, dw, tr, info= env.step(a,channel_gain,next_channel_gain) # dw: dead&win; tr: truncated
+                s_next, r, dw, tr, info= env.step(a,channel_gain) # dw: dead&win; tr: truncated
                 writer.add_scalar("Reward iterasi", r, total_steps)
                 if total_steps > opt.random_steps:
                     if info['EE'] >= 20 and info['data_rate_pass']>=0.8*env.nodes :
@@ -269,7 +265,7 @@ def main():
 
                 agent.replay_buffer.add(np.array(s, dtype=np.float32), a, r, np.array(s_next, dtype=np.float32), dw)
                 s = s_next
-                channel_gain=next_channel_gain
+                #channel_gain=next_channel_gain
                 total_steps += 1
 
                 '''train'''
