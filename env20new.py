@@ -1,4 +1,3 @@
-
 import numpy as np
 from scipy.spatial.distance import cdist
 from typing import Optional
@@ -14,7 +13,7 @@ class GameEnv:
         self.positions = None
         self.channel_gain = None
 
-        self.observation_space = 2 * nodes * nodes + nodes + 1 + 1  # gain, interference, power_prev + Rmin + EE_prev
+        self.observation_space = 2 * nodes * nodes + 2 * nodes + 1 + 1  # gain, gain_prev, power_prev, data_rate_prev, Rmin, EE_prev  
         self.action_space = nodes
 
     def reset(self, seed=None):
@@ -31,13 +30,16 @@ class GameEnv:
 
         state = np.concatenate([
             self.norm(self.channel_gain).flatten(),
-            self.norm(interference).flatten(),
+            self.norm(self.channel_gain_prev).flatten(),
             self.norm(power_prev),
             [self.Rmin],
+            self.norm(data_rate),
             [EE_prev]
         ])
 
         self.power_prev = power_prev
+        self.channel_gain_prev = self.channel_gain.copy()
+        self.data_rate_prev = data_rate
         self.EE_prev = EE_prev
 
         return state.astype(np.float32), {}
@@ -59,8 +61,9 @@ class GameEnv:
 
         state = np.concatenate([
             self.norm(self.channel_gain).flatten(),
-            self.norm(interference).flatten(),
+            self.norm(self.channel_gain_prev).flatten(),
             self.norm(power),
+            self.norm(self.data_rate_prev),
             [self.Rmin],
             [EE]
         ])
