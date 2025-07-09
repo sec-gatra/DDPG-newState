@@ -65,6 +65,7 @@ class GameEnv:
             self.norm(power),
             self.norm(self.data_rate_prev),
             [self.Rmin],
+            self.norm(data_rate),
             [EE]
         ])
 
@@ -79,9 +80,10 @@ class GameEnv:
         return state.astype(np.float32), float(reward), dw, False, info
 
     def sample_valid_power(self):
-        rand = self.rng.random(self.nodes)
-        rand /= rand.sum()
-        return rand * self.p_max
+        rand = np.random.rand(self.nodes)
+        rand /= np.sum(rand)  # jadi distribusi
+        scale = np.random.uniform(0.0, 1.0)  # skala acak antara 0 dan 1
+        return rand * (self.p_max) * scale
 
     def generate_positions(self, minDistance=2, subnet_radius=2, minD=0.5):
         bound = self.area_size[0] - 2 * subnet_radius
