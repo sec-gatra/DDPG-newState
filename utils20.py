@@ -11,160 +11,69 @@ import torch.nn.functional as F
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-'''
-class Actori(nn.Module):#efficient fair
-    def __init__(self, state_dim, action_dim, net_width, Pmax):
+class Actor(nn.Module):
+    def __init__(self, state_dim, action_dim, net_width, maxaction):
         super().__init__()
-        self.Pmax = Pmax
         # shared trunk
         self.net = nn.Sequential(
             nn.Linear(state_dim, net_width),
             nn.ReLU(),
             nn.LayerNorm(net_width),
-
             nn.Linear(net_width, net_width//2),
             nn.ReLU(),
             nn.LayerNorm(net_width//2),
-
             nn.Linear(net_width//2, net_width//4),
             nn.ReLU(),
             nn.LayerNorm(net_width//4),
         )
-        # head untuk distribusi efisiensi
-        self.dist_head      = nn.Linear(net_width//4, action_dim)
-        # head untuk total budget
-        self.scale_head     = nn.Linear(net_width//4, 1)
-        # head untuk trade-off fairness vs efficiency
-        self.fairness_head  = nn.Linear(net_width//4, 1)
+        # two heads
+        self.dist_head  = nn.Linear(net_width//4, action_dim)  # for softmax
+        self.scale_head = nn.Linear(net_width//4, 1)           # for budget
 
-        # inisialisasi kecil untuk menghindari saturasi awal
-        for head in (self.dist_head, self.scale_head, self.fairness_head):
-            nn.init.uniform_(head.weight, -3e-3, 3e-3)
-            nn.init.zeros_(head.bias)
+        self.maxaction = maxaction
 
     def forward(self, state):
-        """
-        state: [B, state_dim]
-        returns p: [B, action_dim], with 0 <= p_i and sum_i p_i <= Pmax
-        """
-        x = self.net(state)                   # [B, H]
-        # 1) base distribution (efficiency)
-        logits = self.dist_head(x)            # [B, A]
-        dist_eff = F.softmax(logits, dim=-1)  # sum=1
+        x = self.net(state)                   # [B, hidden]
+        logits = self.dist_head(x)            # [B, action_dim]
+        dist   = F.softmax(logits, dim=-1)    # sum to 1
 
-        # 2) total power scale
-        scale = torch.sigmoid(self.scale_head(x)).squeeze(-1)  # [B] in (0,1)
-        total_power = scale * self.Pmax                     # [B]
+        scale  = torch.sigmoid(self.scale_head(x)).squeeze(-1)  
+        # scale in (0,1), shape [B]
 
-        # 3) fairness mixing coefficient
-        alpha = torch.sigmoid(self.fairness_head(x)).squeeze(-1)  # [B] in (0,1)
+        total_power = scale * self.maxaction  # shape [B]
+        # expand total_power to [B,action_dim] so we can multiply
+        return dist * total_power.unsqueeze(-1)
 
-        # 4) uniform dist
-        A = dist_eff.size(-1)
-        dist_uni = torch.full_like(dist_eff, 1.0/A)       # [B, A]
 
-        # 5) final distribution: mix efficiency vs uniform
-        dist_final = (1 - alpha).unsqueeze(-1)*dist_eff \
-                     + alpha.unsqueeze(-1)*dist_uni       # [B, A], sum=1
-
-        # 6) allocate power
-        p = dist_final * total_power.unsqueeze(-1)        # [B, A], sum ≤ Pmax
-        return p
-
-class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, net_width, Pmax):
+class Q_Critic(nn.Module):
+    def __init__(self, state_dim, action_dim, net_width=1024):
         super().__init__()
-        # shared trunk (sama seperti sebelumnya)
-        self.net = nn.Sequential(
-            nn.Linear(state_dim, net_width),
-            nn.ReLU(),
-            nn.LayerNorm(net_width),
+        # pertama‐tama embed state saja
+        self.l1 = nn.Linear(state_dim, net_width)
+        self.ln1 = nn.LayerNorm(net_width)
 
-            nn.Linear(net_width, net_width//2),
-            nn.ReLU(),
-            nn.LayerNorm(net_width//2),
+        # setelah itu concat action, lalu dua layer lagi
+        self.l2 = nn.Linear(net_width + action_dim, net_width//2)
+        self.ln2 = nn.LayerNorm(net_width//2)
 
-            nn.Linear(net_width//2, net_width//4),
-            nn.ReLU(),
-            nn.LayerNorm(net_width//4),
-        )
-        # single head: raw power allocations
-        self.out_head = nn.Linear(net_width//4, action_dim)
-        self.Pmax = Pmax
+        self.l3 = nn.Linear(net_width//2, net_width//4)
+        self.ln3 = nn.LayerNorm(net_width//4)
 
-    def forward(self, state):
-        x = self.net(state)               # [B, net_width//4]
-        raw_p = self.out_head(x)          # [B, action_dim]
-        p_pos = F.relu(raw_p)             # ≥ 0
-        p = self._project_simplex(p_pos)  # ensure sum ≤ Pmax
-        return p
+        # output Q‐value scalar
+        self.l4 = nn.Linear(net_width//4, 1)
 
-    def _project_simplex(self, v: torch.Tensor) -> torch.Tensor:
+    def forward(self, state, action):
         """
-        Projects each row of v onto the simplex {p >= 0, sum(p) <= Pmax}.
-        Uses the algorithm from:
-        "Efficient Projections onto the l1-ball for Learning in High Dimensions" (Duchi et al., 2008).
+        state:  Tensor [B, state_dim]
+        action: Tensor [B, action_dim]
         """
-        # v: [B, n]
-        B, n = v.size()
-        # sort in descending order
-        v_sorted, _ = torch.sort(v, descending=True, dim=-1)  # [B, n]
-        cssv = v_sorted.cumsum(dim=-1)                       # cumulative sum
-        arange = torch.arange(1, n+1, device=v.device).view(1, -1)
- #       # find the rho index for each batch
-        cond = v_sorted - (cssv - self.Pmax) / arange > 0     # [B, n]
-        rho = cond.sum(dim=-1) - 1                            # [B]
- #       # compute theta for each batch
-        theta = (cssv[torch.arange(B), rho] - self.Pmax) / (rho + 1).float()  # [B]
- #       # project
-        w = torch.clamp(v - theta.unsqueeze(-1), min=0.0)     # [B, n]
-        return w
-'''
+        x = F.relu(self.ln1(self.l1(state)))             # [B, net_width]
+        x = torch.cat([x, action], dim=-1)               # [B, net_width+action_dim]
+        x = F.relu(self.ln2(self.l2(x)))                 # [B, net_width//2]
+        x = F.relu(self.ln3(self.l3(x)))                 # [B, net_width//4]
+        q = self.l4(x)                                   # [B, 1]
+        return q
 
-class Actor(nn.Module):
-    """
-    Deterministic actor that directly predicts per-node power allocations.
-    Ensures p_i ≥ 0 and p_i ≤ Pmax individually, but does not enforce sum(p_i) ≤ Pmax.
-    To add a sum-constraint, incorporate a soft penalty on sum(p) in your reward.
-    """
-    def __init__(self, state_dim: int, action_dim: int, net_width: int, Pmax: float):
-        super().__init__()
-        self.Pmax = Pmax
-
-        # shared feature extractor
-        self.net = nn.Sequential(
-            nn.Linear(state_dim, net_width),
-            nn.ReLU(),
-            nn.LayerNorm(net_width),
-
-            nn.Linear(net_width, net_width // 2),
-            nn.ReLU(),
-            nn.LayerNorm(net_width // 2),
-
-            nn.Linear(net_width // 2, net_width // 4),
-            nn.ReLU(),
-            nn.LayerNorm(net_width // 4),
-        )
-
-        # head: predict raw positive power values
-        self.out_head = nn.Linear(net_width // 4, action_dim)
-
-        # initialize head weights small to avoid saturation
-        nn.init.uniform_(self.out_head.weight, -3e-3, 3e-3)
-        nn.init.zeros_(self.out_head.bias)
-
-    def forward(self, state: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            state: [B, state_dim] input feature vector.
-
-        Returns:
-            p: [B, action_dim] with 0 <= p_ij <= Pmax.
-        """
-        x = self.net(state)                       # [B, net_width//4]
-        raw_p = F.softplus(self.out_head(x))      # [B, action_dim], >= 0
-        p = torch.clamp(raw_p, max=self.Pmax)     # enforce p_i <= Pmax
-        return p
 class Q_Critic(nn.Module):
     def __init__(self, state_dim, action_dim, net_width=1024):
         super().__init__()
