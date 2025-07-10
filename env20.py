@@ -41,7 +41,7 @@ class GameState:
         p_norm=self.norm(power)
         data_rate_norm=self.norm(ini_data_rate)  
         result_array = np.concatenate((np.array(gain_norm).flatten(), np.array(p_norm),np.array(data_rate_norm), [self.Rmin], [ini_EE] ))
-        return result_array , next_gain, {}
+        return result_array , gain, {}
         
     def step(self,power,channel_gain):
         intr=self.interferensi(power,channel_gain)
