@@ -24,8 +24,8 @@ class GameState:
     def sample_valid_power2(self):
         rand = np.random.rand(self.nodes)
         rand /= np.sum(rand)  # jadi distribusi
-        scale = np.random.uniform(0.0, 1.0)  # skala acak antara 0 dan 1
-        return rand * (1) * scale
+        scale = np.random.uniform(0.0, 0.8)  # skala acak antara 0 dan 1
+        return rand * (self.p_max) * scale
 
     def reset(self,gain=None,*, seed: Optional[int] = None, options: Optional[dict] = None):
         power = self.sample_valid_power2()
