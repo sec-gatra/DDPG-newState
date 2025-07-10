@@ -265,7 +265,6 @@ def main():
 
                 agent.replay_buffer.add(np.array(s, dtype=np.float32), a, r, np.array(s_next, dtype=np.float32), dw)
                 s = s_next
-                #channel_gain=next_channel_gain
                 total_steps += 1
 
                 '''train'''
@@ -277,9 +276,7 @@ def main():
                         s_batch, a_batch, _, _, _ = agent.replay_buffer.sample(opt.batch_size)
                         q_val = agent.q_critic(s_batch, a_batch).mean().item()
                         writer.add_scalar("Q_value/Mean", q_val, total_steps)
-                    # print(f'EnvName:{BrifEnvName[opt.EnvIdex]}, Steps: {int(total_steps/1000)}k, actor_loss:{a_loss}')
-                    # print(f'EnvName:{BrifEnvName[opt.EnvIdex]}, Steps: {int(total_steps/1000)}k, c_loss:{c_loss}')
-        
+
                 '''record & log'''
                 if total_steps % opt.eval_interval == 0:
                 #if total_steps == opt.Max_train_steps:
@@ -312,18 +309,7 @@ def main():
                                 result_reward2 = evaluate_policy_reward(channel_gain_extend,state_extend,eval_env, agent, turns=3)
                                 writer.add_scalar('reward training ddpg', result_reward2, global_step=total_steps+i)
                     '''
-                            
 
-                        
-
-                    #print(f'EnvName:{BrifEnvName[opt.EnvIdex]}, Steps: {int(total_steps/1000)}k, data rate : {result["pct_data_ok"]}')
-
-
-                '''save model'''
-               # if total_steps % opt.save_interval == 0:
-               #     agent.save(BrifEnvName[opt.EnvIdex], int(total_steps/1000))
-                s = s_next
-                channel_gain=next_channel_gain
 
 # Simpan ke Excel
         #df.to_excel(f'energi_efisiensi.xlsx', index=False)
