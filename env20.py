@@ -73,7 +73,7 @@ class GameState:
         reward = 10*np.log(EE) - rate_violation - power_violation
 
         # Final done flag for “dead/win”
-        if count_data_ok >= 0.8*self.nodes + 1 and EE >= 500 : 
+        if count_data_ok >= 0.8*self.nodes  and EE >= 800 : 
             dw = True
         else : 
             dw = False
