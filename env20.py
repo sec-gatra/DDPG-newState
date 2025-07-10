@@ -29,19 +29,20 @@ class GameState:
 
     def reset(self,gain=None,*, seed: Optional[int] = None, options: Optional[dict] = None):
         power = self.sample_valid_power2()
-        if gain == None :    
+        gain_asal = gain
+        if gain_asal == None :    
             loc = self.generate_positions()
-            gain= self.generate_channel_gain(loc)
-        intr=self.interferensi(power,gain)
-        ini_sinr=self.hitung_sinr(gain,intr,power)
+            gain_asal= self.generate_channel_gain(loc)
+        intr=self.interferensi(power,gain_asal)
+        ini_sinr=self.hitung_sinr(gain_asal,intr,power)
         ini_data_rate=self.hitung_data_rate(ini_sinr)
         ini_EE=self.hitung_efisiensi_energi(power,ini_data_rate)
-        gain_norm=self.norm(gain)
+        gain_norm=self.norm(gain_asal)
         intr_norm = self.norm(intr)
         p_norm=self.norm(power)
         data_rate_norm=self.norm(ini_data_rate)  
         result_array = np.concatenate((np.array(gain_norm).flatten(), np.array(p_norm),np.array(data_rate_norm), [self.Rmin], [ini_EE] ))
-        return result_array , gain, {}
+        return result_array , gain_asal, {}
         
     def step(self,power,channel_gain):
         intr=self.interferensi(power,channel_gain)
