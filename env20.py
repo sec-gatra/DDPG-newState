@@ -30,7 +30,7 @@ class GameState:
     def reset(self,gain=None,*, seed: Optional[int] = None, options: Optional[dict] = None):
         power = self.sample_valid_power2()
         gain_asal = gain
-        if gain_asal == None :    
+        if gain_asal is None :    
             loc = self.generate_positions()
             gain_asal= self.generate_channel_gain(loc)
         intr=self.interferensi(power,gain_asal)
