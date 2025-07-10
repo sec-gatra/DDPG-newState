@@ -71,7 +71,7 @@ class GameState:
         #fairness_penalty = np.std(data_rate)
         # Reward formula dinamis
  
-        reward = 50*np.log(EE) - 20*rate_violation - power_violation
+        reward = 200*np.log(EE) - 20*rate_violation - power_violation
 
         # Final done flag for “dead/win”
         if count_data_ok >= 0.8*self.nodes  and EE >= 800 : 
