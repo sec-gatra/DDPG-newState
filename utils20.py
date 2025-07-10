@@ -171,7 +171,7 @@ def evaluate_policy(channel_gain, state, env, agent, turns=1):
             total_rate=info['total_rate']
 
             #step dari random 
-            s_next1, r1, dw1, tr1, info1 = env.step(a_rand, channel_gain, next_channel_gain)
+            s_next1, r1, dw1, tr1, info1 = env.step(a_rand, channel_gain)
             data_rate_rand=info1['data_rate']
             
             print(f'DDPG power : {a}, reward :{r}, total power {np.sum(a)}')
